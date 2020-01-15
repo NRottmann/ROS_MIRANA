@@ -1,0 +1,130 @@
+<launch>
+
+    <arg name="output"                  default="screen"/>
+
+    <!-- Filter depth image -->
+    <arg name="filter_depth"            default="true"/>
+    <arg name="blur_size"               default="3"/>
+
+    <!-- Filter laser scan -->
+    <arg name="filter_scan"            	default="true"/>
+    <arg name="scan_blur_size"          default="11"/>
+    <arg name="scan_filter_topic"       default="/scan" />
+    <arg name="scan_filter_topic_relay" default="/scan_filtered" />
+
+    <!-- Rgbd topic -->
+    <arg name="rgbd_pub"                default="true"/>
+    <arg name="rgbd_approx_sync"        default="true"/>
+    <arg name="rgbd_queue_size"         default="10"/>
+    <arg name="rgbd_depth_scale"        default="1"/>
+
+    <!-- Decompress rgb -->
+    <arg name="decompress_rgb"          default="true"/>
+    <arg name="rgb_image_transport"     default="compressed"/>
+
+    <!-- Scan -->
+    <arg name="scan_pub"                default="true"/>
+    <arg name="scan_height"             default="10"/>
+    <arg name="scan_frame"              default="neck_center_body_yaw_frame"/>
+
+    <!-- Topics -->
+    <arg name="odom_topic"              default="/loomo/odom"/>
+    <arg name="odom_topic_relay"        default="/odom"/>
+
+    <arg name="rgb_topic"               default="/loomo/camera/color/image_raw" />
+    <arg name="rgb_info_topic"          default="/loomo/camera/color/camera_info" />
+    <arg name="rgb_topic_relay"         default="/camera/rgb/image_raw"/>
+    <arg name="rgb_info_topic_relay"    default="/camera/rgb/camera_info"/>
+
+    <arg name="depth_topic"             default="/loomo/camera/depth/image_raw" />
+    <arg name="depth_info_topic"        default="/loomo/camera/depth/camera_info" />
+    <arg name="depth_topic_relay"       default="/camera/depth/image_raw"/>
+    <arg name="depth_info_topic_relay"  default="/camera/depth/camera_info"/>
+
+    <arg name="rgbd_topic"              default="/camera/rgbd/image_raw"/>
+
+
+
+    <!-- Nodes -->
+
+    <!-- Republish infos -->
+
+    <node name="relay_rgb_info"
+        pkg="topic_tools"
+        type="relay"
+        args="$(arg rgb_info_topic) $(arg rgb_info_topic_relay)" />
+
+
+    <node name="relay_depth_info"
+        pkg="topic_tools"
+        type="relay"
+        args="$(arg depth_info_topic) $(arg depth_info_topic_relay)" />
+
+
+    <!-- Republish rgb -->
+
+    <node if="$(arg decompress_rgb)" name="republish_rgb"
+        type="republish"
+        pkg="image_transport"
+        args="$(arg rgb_image_transport) in:=$(arg rgb_topic) raw out:=$(arg rgb_topic_relay)" />
+
+    <node unless="$(arg decompress_rgb)" name="relay_rgb"
+        pkg="topic_tools"
+        type="relay"
+        args="$(arg rgb_topic) $(arg rgb_topic_relay)" />
+
+
+    <!-- Republish odom -->
+
+    <node name="relay_odom"
+        pkg="topic_tools"
+        type="relay"
+        args="$(arg odom_topic) $(arg odom_topic_relay)" />
+
+
+    <!-- Republish depth -->
+
+    <node unless="$(arg filter_depth)" name="relay_depth"
+        pkg="topic_tools"
+        type="relay"
+        args="$(arg depth_topic) $(arg depth_topic_relay)" />
+
+    <node if="$(arg filter_depth)" pkg="automap" name="depth_filter" type="depth_filter.py" output="$(arg output)">
+        <param name = "input_topic"     value = "$(arg depth_topic)" />
+        <param name = "output_topic"    value = "$(arg depth_topic_relay)" />
+        <param name = "blur_size"       value = "$(arg blur_size)" />
+    </node>
+
+
+    <!-- Publish rgbd -->
+
+    <node if="$(arg rgbd_pub)" pkg="nodelet" type="nodelet" name="rgbd_sync"
+        args="standalone rtabmap_ros/rgbd_sync" output="$(arg output)">
+
+        <remap from="rgb/image"       to="$(arg rgb_topic_relay)"/>
+        <remap from="depth/image"     to="$(arg depth_topic_relay)"/>
+        <remap from="rgb/camera_info" to="$(arg rgb_info_topic_relay)"/>
+        <remap from="rgbd_image"      to="$(arg rgbd_topic)"/>
+
+        <param name="approx_sync"     type="bool"   value="$(arg rgbd_approx_sync)"/>
+        <param name="queue_size"      type="int"    value="$(arg rgbd_queue_size)"/>
+        <param name="depth_scale"     type="double" value="$(arg rgbd_depth_scale)"/>
+    </node>
+
+
+    <!-- Publish scan -->
+
+    <node if="$(arg scan_pub)" pkg="depthimage_to_laserscan" type="depthimage_to_laserscan" name="depthimage_to_laserscan" output="$(arg output)">
+        <param name="scan_height"       value="$(arg scan_height)"/>
+        <param name="output_frame_id"   value="$(arg scan_frame)"/>
+        <remap from="image" to="$(arg depth_topic_relay)" />
+    </node>
+
+    <!-- Filter scan -->
+    <node if="$(arg filter_scan)" pkg="automap" name="scan_filter" type="scan_filter.py" output="$(arg output)">
+        <param name = "input_topic"     value = "$(arg scan_filter_topic)" />
+        <param name = "output_topic"    value = "$(arg scan_filter_topic_relay)" />
+        <param name = "blur_size"       value = "$(arg scan_blur_size)" />
+    </node>
+
+</launch>

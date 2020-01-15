@@ -1,0 +1,148 @@
+<launch>
+    <!-- ........................... Args .................................. -->
+
+    <arg name="robot_color_image_topic" default = "loomo/camera/color/image_raw" />
+    <arg name="robot_depth_image_topic" default = "loomo/camera/depth/image_raw" />
+
+    <arg name="color_image_topic"       default = "camera/color/image_raw" />
+    <arg name="depth_image_topic"       default = "camera/depth/image_raw" />
+
+    <arg name="rtabmap"                 default="false" />
+    <arg name="rviz"                    default="false" />
+    <arg name="rtabmapviz" 		        default="false" />
+
+    <arg name="rviz_cfg" 		        default="$(find automap)/config/costMap.rviz" />
+    <arg name="output" 			        default="screen"/>
+    <arg name="rate"                    default="5"/> <!-- Rate we want to publish RGBD -->
+    <!-- ........................... Nodes ................................. -->
+
+      <group ns="rtabmap">
+
+        <node if="$(arg rtabmap)" name="rtabmap" pkg="rtabmap_ros" type="rtabmap" args="--delete_db_on_start" output="screen">
+              <param name="frame_id" type="string" value="base_link"/>
+
+              <!-- Set general parameters -->
+              <param name="subscribe_depth"	type="bool"   value="true"/>
+              <param name="subscribe_scan" 	type="bool"   value="false"/>
+              <param name="visual_odometry" type="bool"   value="false"/>
+              <param name="approx_sync"   	type="bool"   value="true"/>
+
+    	      <!-- Remap images -->
+              <remap from="rgb/image" 		to="/camera/color/image_raw"/>
+              <remap from="depth/image" 	to="/camera/depth/image_raw"/>
+              <remap from="rgb/camera_info" to="/loomo/camera/color/camera_info"/>
+              <remap from="odom" 			to="/loomo/odom" />
+
+    		  <!-- Set queue size, determines how many images are stored -->
+              <param name="queue_size" type="int" value="30"/>
+
+              <!-- RTAB-Map's parameters -->
+              <param name="Reg/Force3DoF"             	type="string" value="true"/>  <!-- Force 2D environment for mapping -->
+
+              <param name="Grid/FromDepth" 			  	type="string" value="true"/>  <!-- Depth Image data to generate occupancy grid map -->
+              <param name="Grid/RayTracing" 			type="string" value="true"/>  <!-- Fill in gaps of occupancy grid map  between walls and robot -->
+
+					<!-- Correspondences: 0=Features Matching, 1=Optical Flow -->
+              <param name="Vis/MinInliers"				type="string" value="7"/>
+
+              <param name="Rtabmap/DetectionRate"	  	type="string" value="1"/>
+              <param name="Rtabmap/TimeThr" 		  	type="string" value="650"/>
+
+              <param name="Mem/BadSignaturesIgnored"  type="string" value="true"/>
+              <!--
+              <param name="Reg/Strategy"              	type="string" value="0"/>
+
+              <param name="RGBD/LocalImmunizationRatio" type="string" value="0.5"/>
+              <param name="RGBD/AngularUpdate"          type="string" value="0.01"/>
+              <param name="RGBD/LinearUpdate"           type="string" value="0.01"/>
+              <param name="RGBD/ProximityBySpace"       type="string" value="true"/>
+              <param name="RGBD/ProximityByTime"        type="string" value="false"/>
+              <param name="RGBD/NeighborLinkRefining"   type="string" value="true"/>
+              <param name="Rtabmap/LoopThr"			  	type="string" value="0.15"/>
+
+
+              -->
+        </node>
+
+        <!-- Visualisation RTAB-Map -->
+        <node if="$(arg rtabmapviz)" pkg="rtabmap_ros" type="rtabmapviz" name="rtabmapviz" args="-d $(find rtabmap_ros)/launch/config/rgbd_gui.ini">
+    			<param name="subscribe_depth" type="bool" value="true"/>
+                <param name="frame_id" type="string" value="base_link"/>
+                <param name="wait_for_transform" type="bool" value="true"/>
+
+                <remap from="rgb/image" 		to="/camera/color/image_raw"/>
+    			<remap from="depth/image" 		to="/camera/depth/image_raw"/>
+    			<remap from="rgb/camera_info" to="loomo/camera/color/camera_info"/>
+    			<remap from="odom" 			to="loomo/odom" />
+        </node>
+
+        <!-- Visualization RVIZ -->
+    	<node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_cfg)"/>
+    	<node if="$(arg rviz)" pkg="nodelet" type="nodelet" name="points_xyzrgb" args="standalone rtabmap_ros/point_cloud_xyzrgb" output="$(arg output)">
+    		<remap from="rgb/image" 		to="/camera/color/image_raw"/>
+    		<remap from="depth/image" 		to="/camera/depth/image_raw"/>
+    		<remap from="rgb/camera_info" to="loomo/camera/color/camera_info"/>
+    		<remap from="cloud"             to="voxel_cloud" />
+
+    		<param name="decimation"  type="double" value="4"/>
+    		<param name="voxel_size"  type="double" value="0.0"/>
+    		<param name="approx_sync" type="bool"   value="true"/>
+    	</node>
+
+
+    </group>
+
+    <group ns="camera">
+        <node pkg="nodelet" type="nodelet" name="camera_nodelet_manager" args="manager" output="screen"/>
+
+        <!-- Use same nodelet used by ZED to avoid image serialization -->
+        <node pkg="nodelet" type="nodelet" name="rgbd_sync" args="load rtabmap_ros/rgbd_sync camera_nodelet_manager" output="screen">
+          <param name="compressed_rate"  type="double" value="$(arg rate)"/>
+          <param name="approx_sync"      type="bool"   value="true"/>
+
+          <remap from="rgb/image"       to="/camera/color/image_raw"/>
+          <remap from="depth/image"     to="/camera/depth/image_raw"/>
+          <remap from="rgb/camera_info" to="/loomo/camera/color/camera_info"/>
+
+          <remap from="rgbd_image"      to="/camera/rgbd"/>
+        </node>
+
+        <!--
+        <node unless="$(arg rgbd_sync)" pkg="nodelet" type="nodelet" name="data_throttle" args="load rtabmap_ros/data_throttle camera_nodelet_manager" output="screen">
+          <param name="rate"         type="double" value="$(arg rate)"/>
+          <param name="approx_sync"  type="bool"   value="$(arg approx_sync)"/>
+
+          <remap from="rgb/image_in"       to="rgb/image_rect_color"/>
+          <remap from="depth/image_in"     to="depth/depth_registered"/>
+          <remap from="rgb/camera_info_in" to="rgb/camera_info"/>
+
+          <remap from="rgb/image_out"       to="throttled/rgb/image_rect_color"/>
+          <remap from="depth/image_out"     to="throttled/depth_registered/image_raw"/>
+          <remap from="rgb/camera_info_out" to="throttled/rgb/camera_info"/>
+        </node>
+        -->
+    </group>
+
+    <node pkg="automap" name="depth_filter" type="depth_filter.py" output="screen">
+        <param name = "image_topic"     value = "camera/depth/image_raw" />
+        <param name = "blur_size"       value = "3" />
+    </node>
+
+
+    <node pkg="depthimage_to_laserscan" type="depthimage_to_laserscan" name="depthimage_to_laserscan" output="screen">
+        <param name="scan_height"       value="3"/>
+        <param name="output_frame_id"   value="neck_center_body_yaw_frame"/>
+        <remap from="image" to="camera/depth/image_raw_filtered" />
+    </node>
+
+    <!-- ....................... Decompressing ............................. -->
+
+    <node name="republish" type="republish" pkg="image_transport" output="screen"
+        args="compressed in:=$(arg robot_color_image_topic) raw out:=$(arg color_image_topic)" />
+
+
+    <!-- ........................... Relays ................................ -->
+
+    <node pkg="topic_tools" type="relay" name="relay_depth" args="$(arg robot_depth_image_topic) $(arg depth_image_topic)" />
+
+</launch>

@@ -1,0 +1,15 @@
+<launch>
+
+    <arg name="relay"               default="true"/>
+    <arg name="movebase"            default="true"/>
+    <arg name="rtabmap"             default="true"/>
+    <arg name="exploration"         default="true"/>
+
+    <include if="$(arg relay)"      file="$(find automap)/launch/loomo_relay.launch"/>
+    <include if="$(arg rtabmap)"   file="$(find automap)/launch/rtabmap.launch">
+	<arg name="database_path" value="$(find automap)/map/clinic.db"/>
+    </include>
+    <include if="$(arg movebase)"    file="$(find automap)/launch/movebase.launch"/>
+    <include if="$(arg exploration)"    file="$(find automap)/launch/exploration.launch"/>
+
+</launch>

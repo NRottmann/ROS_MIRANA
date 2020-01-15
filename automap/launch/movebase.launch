@@ -1,0 +1,26 @@
+<launch>
+
+    <arg name="normal_planner"      default="false"/>
+    <arg name="teb_planner"         default="true"/>
+    <arg name="dwa_planner"         default="false"/>
+
+    <node pkg="move_base" type="move_base" name="move_base" output="screen">
+        <param name="controller_frequency"  value="10.0"/>
+
+        <rosparam file="$(find automap)/launch/config/costmap_common_params.yaml" command="load" ns="global_costmap" />
+        <rosparam file="$(find automap)/launch/config/costmap_common_params.yaml" command="load" ns="local_costmap" />
+        <rosparam file="$(find automap)/launch/config/local_costmap_params.yaml" command="load" />
+        <rosparam file="$(find automap)/launch/config/global_costmap_params.yaml" command="load" />
+
+        <param    name="base_global_planner"       value="global_planner/GlobalPlanner"/>
+        <rosparam file="$(find automap)/launch/config/planner_global.yaml" command="load" />
+
+        <rosparam  if="$(arg normal_planner)"   file="$(find automap)/launch/config/planner_normal.yaml" command="load" />
+
+        <rosparam  if="$(arg dwa_planner)"      file="$(find automap)/launch/config/planner_dwa.yaml" command="load" />
+        <param if="$(arg dwa_planner)"          name="base_local_planner" value="dwa_local_planner/DWAPlannerROS"/>
+
+        <rosparam  if="$(arg teb_planner)"      file="$(find automap)/launch/config/planner_teb.yaml" command="load" />
+        <param if="$(arg teb_planner)"          name="base_local_planner" value="teb_local_planner/TebLocalPlannerROS"/>
+    </node>
+</launch>
